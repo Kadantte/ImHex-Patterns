@@ -1,5 +1,5 @@
 #pragma author WerWolv
-#pragma description STL 3D Model format
+#pragma description STL 3D Model
 
 #pragma MIME model/stl
 #pragma MIME model/x.stl-binary
@@ -30,7 +30,7 @@ struct BinarySTLHeader {
     u32 triangleCount;
 };
 
-struct STL {    
+struct STL {
     if (std::mem::read_string(0, 6) == "solid ")
         std::warning("ASCII STL file!");
     else {

@@ -1,9 +1,10 @@
-#pragma description RIFF header, WAVE header, PCM header
+#pragma description RIFF/WAVE/PCM (.wav)
 
 #pragma MIME audio/x-wav
 #pragma MIME audio/wav
 
 import std.mem;
+import type.guid;
 
 struct RiffHeader {
   char ckID[4] [[comment("Container Signature"), name("RIFF Header Signature")]];
@@ -27,6 +28,7 @@ enum WaveFormatType : u16 {
   GSM610     = 0x31,
   MPEG       = 0x50,
   MPEGLAYER3 = 0x55,
+  EXTENSIBLE = 0xFFFE,
 };
 
 struct WaveFormat {
@@ -42,10 +44,41 @@ struct WaveFormatEx {
   u16 extendedDataSize;
 };
 
+bitfield ChannelMask {
+  SPEAKER_FRONT_LEFT : 1;
+  SPEAKER_FRONT_RIGHT: 1;
+  SPEAKER_FRONT_CENTER: 1;
+  SPEAKER_LOW_FREQUENCY: 1;
+  SPEAKER_BACK_LEFT: 1;
+  SPEAKER_BACK_RIGHT: 1;
+  SPEAKER_FRONT_LEFT_OF_CENTER: 1;
+  SPEAKER_FRONT_RIGHT_OF_CENTER: 1;
+  SPEAKER_BACK_CENTER: 1;
+  SPEAKER_SIDE_LEFT: 1;
+  SPEAKER_SIDE_RIGHT: 1;
+  SPEAKER_TOP_CENTER: 1;
+  SPEAKER_TOP_FRONT_LEFT: 1;
+  SPEAKER_TOP_FRONT_CENTER: 1;
+  SPEAKER_TOP_FRONT_RIGHT: 1;
+  SPEAKER_TOP_BACK_LEFT: 1;
+  SPEAKER_TOP_BACK_CENTER: 1;
+  SPEAKER_TOP_BACK_RIGHT: 1;
+  padding : 14;
+};
+
+struct WaveFormatExtensibleChunks {
+    u16 validBitsPerSample;
+    ChannelMask channelMask;
+    type::GUID subformat;
+};
+
 struct WaveFormatExDummy {
   u16 bitsPerSample;
   u16 extendedDataSize;
-  u8  extendedData[extendedDataSize];
+  if (parent.fmt.formatTag == WaveFormatType::EXTENSIBLE)
+    WaveFormatExtensibleChunks waveFormatExtensible;
+  else
+    u8  extendedData[extendedDataSize];
 };
 
 struct WaveFormatPCM {
@@ -53,7 +86,7 @@ struct WaveFormatPCM {
 };
 
 struct WaveMSADPCMCoefSet {
-  s16 coef1;    
+  s16 coef1;
   s16 coef2;
 };
 

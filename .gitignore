@@ -1,5 +1,15 @@
 
-tests/cmake-build-debug/
+tests/cmake*/
+tests/build*/
+build/
+cmake-build-*/
 
+.vscode/
+.devcontainer/
+.cache/
 .idea/
 .DS_Store
+
+compile_commands.json
+
+scripts/__pycache__/

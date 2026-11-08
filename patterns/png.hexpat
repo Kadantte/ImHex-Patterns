@@ -1,4 +1,4 @@
-#pragma description PNG image files 
+#pragma description PNG image
 
 #pragma MIME image/png
 #pragma endian big
@@ -121,6 +121,26 @@ struct palette_entry_t {
     u24 color;
 } [[inline]];
 
+struct chrm_t {
+    u32 white_point_x;
+    u32 white_point_y;
+    u32 red_x;
+    u32 red_y;
+    u32 green_x;
+    u32 green_y;
+    u32 blue_x;
+    u32 blue_y;
+};
+
+struct time_t {
+    u16 year;
+    u8 month;
+    u8 day;
+    u8 hour;
+    u8 minute;
+    u8 second;
+};
+
 struct chunk_t {
     u32 length [[color("17BECF")]];
     char name[4];
@@ -139,6 +159,8 @@ struct chunk_t {
     #define acTL_k "acTL"
     #define fdAT_k "fdAT"
     #define fcTL_k "fcTL"
+    #define cHRM_k "cHRM"
+    #define tIME_k "tIME"
 
     if (name == IHDR_k) {
         ihdr_t ihdr [[comment("Image Header chunk"), name("IHDR")]];
@@ -167,6 +189,10 @@ struct chunk_t {
     } else if (name == fdAT_k) {
         fdat_t fdat [[comment("Frame data chunk")]];
         u8 data[length-sizeof(u32)];
+    } else if (name == cHRM_k) {
+        chrm_t chrm;
+    } else if (name == tIME_k) {
+        time_t time;
     } else {
         u8 data[length];
     }
@@ -188,6 +214,11 @@ struct Chunks {
     chunk_t iend_chunk [[comment("Image End Chunk")]];
 };
 
-u8 visualizer[std::mem::size()] @ 0x00 [[sealed, hex::visualize("image", this)]];
-header_t header @ 0x00 [[comment("PNG file signature"), name("Signature")]];
-Chunks chunks @ 0x08 [[name("Chunks")]];
+struct Png {
+    header_t header [[comment("PNG file signature"), name("Signature")]];
+    Chunks chunks [[name("Chunks")]];
+    u128 length = $ - addressof(this);
+    u8 visualizer[length] @ addressof(this) [[sealed, hex::visualize("image", this), no_unique_address]];
+};
+
+Png png @ 0x00;

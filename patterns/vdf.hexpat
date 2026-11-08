@@ -1,5 +1,5 @@
 #pragma author WerWolv
-#pragma description Binary Value Data Format (.vdf) files
+#pragma description Valve Binary Value Data Format (.vdf)
 
 #pragma eval_depth 0x10000
 
@@ -15,9 +15,9 @@ enum Type : u8 {
 
 struct Entry {
 	Type type;
-	
+
 	char name[];
-	
+
 	if (type == Type::Set) {
 		Entry entries[while (std::mem::read_unsigned($, 1) != Type::EndSet)];
 		Type endSet [[hidden]];

@@ -1,4 +1,4 @@
-#pragma description MPEG-4 Part 14 digital multimedia container format
+#pragma description MPEG-4 Part 14 digital multimedia container (MP4)
 
 #pragma endian big
 
@@ -10,27 +10,79 @@ import std.io;
 import std.mem;
 import std.string;
 
+// All known MP4/ISOBMFF container box types (boxes that contain other boxes)
+const u32 CONTAINER_BOX_TYPES_COUNT = 28;
+str CONTAINER_BOX_TYPES[CONTAINER_BOX_TYPES_COUNT] = {
+    "moov",  // Movie
+    "trak",  // Track
+    "edts",  // Edit
+    "mdia",  // Media
+    "minf",  // Media Information
+    "dinf",  // Data Information
+    "stbl",  // Sample Table
+    "mvex",  // Movie Extends
+    "moof",  // Movie Fragment
+    "traf",  // Track Fragment
+    "mfra",  // Movie Fragment Random Access
+    "udta",  // User Data
+    "meta",  // Metadata
+    "ilst",  // Item List (iTunes metadata)
+    "meco",  // Additional Metadata Container
+    "tref",  // Track Reference
+    "trgr",  // Track Grouping
+    "sinf",  // Protection Scheme Information
+    "schi",  // Scheme Information
+    "ipro",  // Item Protection
+    "iprp",  // Item Properties
+    "ipco",  // Item Property Container
+    "iref",  // Item Reference
+    "grpl",  // Group List
+    "clip",  // Clipping (QuickTime)
+    "matt",  // Track Matte (QuickTime)
+    "strk",  // Sub Track
+    "strd"   // Sub Track Definition
+};
+
 fn to_string(auto var) {
     return str(var);
+};
+
+fn is_container_box(str type_str) {
+    for (u32 i = 0, i < CONTAINER_BOX_TYPES_COUNT, i += 1) {
+        if (CONTAINER_BOX_TYPES[i] == type_str) {
+            return true;
+        }
+    }
+    return false;
 };
 
 fn format_string(auto string) {
     return string.value;
 };
 
+fn format_fixed32(auto fp32) {
+    return fp32.integer + fp32.fraction / 65536.0;
+};
+
+fn format_fixed16(auto fp16) {
+    return fp16.integer + fp16.fraction / 256.0;
+};
+
 struct FixedPoint16 {
     u8 integer;
     u8 fraction;
-};
+} [[format("format_fixed16")]];
 
 struct FixedPoint32 {
     u16 integer;
     u16 fraction;
-};
+} [[format("format_fixed32")]];
 
 struct string {
     char value[std::mem::find_sequence_in_range(0, $, std::mem::size(), 0x00) - $];
 } [[sealed, format("format_string")]];
+
+using Box;
 
 struct BaseBox {
     u64 boxSize = 0;
@@ -47,13 +99,19 @@ struct BaseBox {
     if (this.size == 1) {
         u64 largeSize;
         boxSize = largeSize;
-        endOffset = startOffset + boxSize;
-    } else if (this.size == 0) { 
+        if (startOffset + boxSize > std::mem::size())
+            endOffset = std::mem::size();
+        else
+            endOffset = startOffset + boxSize;
+    } else if (this.size == 0) {
         boxSize = std::mem::size() - startOffset;
         endOffset = std::mem::size();
     } else {
         boxSize = size;
-        endOffset = startOffset + boxSize;
+        if (startOffset + boxSize > std::mem::size())
+            endOffset = std::mem::size();
+        else
+            endOffset = startOffset + boxSize;
     }
 
     if (this.type == "uuid") {
@@ -122,8 +180,8 @@ struct TrackHeaderBox : FullBox {
     s16 volume;
     u16 reserved_3;
     s32 matrix[9];
-    u32 width;
-    u32 height;
+    FixedPoint32 width;
+    FixedPoint32 height;
 };
 
 struct DataEntryBox : FullBox {
@@ -140,19 +198,6 @@ struct DataEntryBox : FullBox {
 struct DataReferenceBox : FullBox {
     u32 entry_count;
     DataEntryBox data_entries[this.entry_count];
-};
-
-struct SubDataInformationBox {
-    u32 type = std::mem::read_unsigned($ + 4, 4, std::mem::Endian::Big);
-
-    match (str(type)) {
-        ("dref"): DataReferenceBox box [[inline]];
-        (_): UnknownBox box [[inline]];
-    }
-} [[name(std::format("DataInformationBox({})", box.type))]];
-
-struct DataInformationBox : BaseBox {
-    SubDataInformationBox box[while($ < endOffset)] [[inline]];
 };
 
 struct HandlerBox : FullBox {
@@ -205,19 +250,9 @@ struct Mp4aBox : BaseBox {
     u8 unk[while($ != endOffset)];
 };
 
-struct SubSampleDescriptionBox {
-    u32 type = std::mem::read_unsigned($ + 4, 4, std::mem::Endian::Big);
-
-    match (str(type)) {
-        ("mp4a"): Mp4aBox box [[inline]];
-        ("avc1"): Avc1Box box [[inline]];
-        (_): UnknownBox box [[inline]];
-    }
-} [[name(std::format("SubSampleDescriptionBox({})", box.type))]];
-
 struct SampleDescriptionBox : FullBox {
         u32 entry_count;
-        SubSampleDescriptionBox box[while($ < endOffset)] [[inline]];
+        Box box[while($ < endOffset)] [[inline]];
 };
 
 struct SampleTimeToSampleEntry {
@@ -275,38 +310,12 @@ struct CompositionOffsetBox: FullBox {
     }
 };
 
-struct SubSampleBoxTable {
-    u32 type = std::mem::read_unsigned($ + 4, 4, std::mem::Endian::Big);
-
-    match (str(type)) {
-        ("stsd"): SampleDescriptionBox box [[inline]];
-        ("stts"): SampleTimeToSampleBox box [[inline]];
-        ("stsc"): SampleToChunkBox box [[inline]];
-        ("stco"): ChunkOffsetBox box [[inline]];
-        ("stss"): SyncSampleBox box [[inline]];
-        ("ctts"): CompositionOffsetBox box [[inline]];
-        (_): UnknownBox box [[inline]];
+struct SampleSizeBox: FullBox {
+    u32 sample_size;
+    u32 sample_count;
+    if(this.sample_size==0) {
+        u32 entry_size[this.sample_count];
     }
-} [[name(std::format("SubSampleBoxTable({})", box.type))]];
-
-struct SampleBoxTable : BaseBox {
-    SubSampleBoxTable box[while($ < endOffset)] [[inline]];
-};
-
-struct SubMediaInformationBox {
-    u32 type = std::mem::read_unsigned($ + 4, 4, std::mem::Endian::Big);
-
-    match (str(type)) {
-        ("vmhd"): VideoMediaHeaderBox box [[inline]];
-        ("hdlr"): HandlerBox box [[inline]];
-        ("dinf"): DataInformationBox box [[inline]];
-        ("stbl"): SampleBoxTable box [[inline]];
-        (_): UnknownBox box [[inline]];
-    }
-} [[name(std::format("MediaInformationBox({})", box.type))]];
-
-struct MediaInformationBox : BaseBox {
-    SubMediaInformationBox box[while($ < endOffset)] [[inline]];
 };
 
 struct MediaHeaderBox : FullBox {
@@ -323,21 +332,6 @@ struct MediaHeaderBox : FullBox {
     }
     u16 language [[comment("ISO-639-2/T language code")]];
     u16 quality;
-};
-
-struct SubMediaBox {
-    u32 type = std::mem::read_unsigned($ + 4, 4, std::mem::Endian::Big);
-
-    match (str(type)) {
-        ("mdhd"): MediaHeaderBox box [[inline]];
-        ("hdlr"): HandlerBox box [[inline]];
-        ("minf"): MediaInformationBox box [[inline]];
-        (_): UnknownBox box [[inline]];
-    }
-} [[name(std::format("MediaBox({})", box.type))]];
-
-struct MediaBox : BaseBox {
-    SubMediaBox box[while($ < endOffset)] [[inline]];
 };
 
 struct EditListEntry64 {
@@ -363,51 +357,14 @@ struct EditListBox : FullBox {
     }
 };
 
-struct SubEditBox {
-    u32 type = std::mem::read_unsigned($ + 4, 4, std::mem::Endian::Big);
-
-    match (str(type)) {
-        ("elst"): EditListBox box [[inline]];
-        (_): UnknownBox box [[inline]];
-    }
-} [[name(std::format("EditBox({})", box.type))]];
-
-struct EditBox : BaseBox {
-    SubEditBox box[while($ < endOffset)] [[inline]];
-};
-
-struct SubTrackBox {
-    u32 type = std::mem::read_unsigned($ + 4, 4, std::mem::Endian::Big);
-
-    match (str(type)) {
-        ("mdia"): MediaBox box [[inline]];
-        ("edts"): EditBox box [[inline]];
-        ("tkhd"): TrackHeaderBox box [[inline]];
-        (_): UnknownBox box [[inline]];
-    }
-} [[name(std::format("TrackBox({})", box.type))]];
-
-struct TrackBox : BaseBox {
-    SubTrackBox box[while($ < endOffset)] [[inline]];
-};
-
-struct SubMovieBox {
-    u32 type = std::mem::read_unsigned($ + 4, 4, std::mem::Endian::Big);
-
-    match (str(type)) {
-        ("mvhd"): MovieHeaderBox box [[inline]];
-        ("trak"): TrackBox box [[inline]];
-        (_): UnknownBox box [[inline]];
-        // TODO: Add "iods" box
-    }
-} [[name(std::format("MovieBox({})", box.type))]];
-
-struct MovieBox : BaseBox {
-    SubMovieBox box[while($ < endOffset)] [[inline]];
-};
-
 struct MediaDataBox : BaseBox {
-    u8 data[while($ < endOffset)] [[sealed]];
+    std::mem::Bytes<endOffset - $> data;
+};
+
+using Box;
+
+struct ContainerBox : BaseBox {
+    Box children[while($ < endOffset)] [[inline]];
 };
 
 struct Box {
@@ -415,9 +372,28 @@ struct Box {
 
     match (str(type)) {
         ("ftyp"): FileTypeBox box [[inline]];
-        ("moov"): MovieBox box [[inline]];
         ("mdat"): MediaDataBox box [[inline]];
-        (_): UnknownBox box [[inline]];
+        ("mvhd"): MovieHeaderBox box [[inline]];
+        ("mdhd"): MediaHeaderBox box [[inline]];
+        ("dref"): DataReferenceBox box [[inline]];
+        ("tkhd"): TrackHeaderBox box [[inline]];
+        ("mp4a"): Mp4aBox box [[inline]];
+        ("avc1"): Avc1Box box [[inline]];
+        ("stsd"): SampleDescriptionBox box [[inline]];
+        ("stts"): SampleTimeToSampleBox box [[inline]];
+        ("stsc"): SampleToChunkBox box [[inline]];
+        ("stco"): ChunkOffsetBox box [[inline]];
+        ("stss"): SyncSampleBox box [[inline]];
+        ("ctts"): CompositionOffsetBox box [[inline]];
+        ("stsz"): SampleSizeBox box [[inline]];
+        ("vmhd"): VideoMediaHeaderBox box [[inline]];
+        ("hdlr"): HandlerBox box [[inline]];
+        ("elst"): EditListBox box [[inline]];
+        (_): if (is_container_box(str(type))) {
+            ContainerBox box [[inline]];
+        } else {
+            UnknownBox box [[inline]];
+        }
     }
 } [[name(std::format("Box({})", box.type))]];
 

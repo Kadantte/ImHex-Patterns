@@ -1,4 +1,4 @@
-#pragma description GIF image files
+#pragma description GIF image
 
 #pragma MIME image/gif
 
@@ -8,8 +8,8 @@
 #define LABEL_APPLICATION 0xFF
 #define LABEL_PLAINTEXT 0x01
 
-// Indentifier Magics
-#define IMAGE_SEPERATOR_MAGIC 0x2C
+// Identifier Magics
+#define IMAGE_SEPARATOR_MAGIC 0x2C
 #define EXTENSION_INTRODUCER_MAGIC 0x21
 #define GIF_TRAILER_MAGIC 0x3B
 
@@ -27,7 +27,7 @@ bitfield GCT_Flags {
     colorRes : 3 [[comment("Indicates the richness of the original pallet")]];
     enabled : 1;
 };
-    
+
 bitfield ImageDescriptorFlags {
     lctSize: 3;
     reserved: 2;
@@ -35,7 +35,7 @@ bitfield ImageDescriptorFlags {
     interlaceFlag: 1;
     lctEnable: 1;
 };
-    
+
 bitfield GCE_Flags {
     transparent : 1;
     userInput : 1;
@@ -68,7 +68,7 @@ struct LogicalScreenDescriptor {
     u16 height;
     GCT_Flags gctFlags;
     u8 bgColorIndex;
-    u8 pixelAscpet;
+    u8 pixelAspect;
     if (gctFlags.enabled) {
         Color gct[std::math::pow(2, gctFlags.size + 1)];
     }
@@ -84,7 +84,7 @@ struct ImageDescriptor {
         Color lct[std::math::pow(2, flags.lctSize + 1)];
     }
     u8 lzwMinCode [[comment("This byte determines the initial number of bits used for LZW codes in the image data")]];
-    DataSubBlocks lzwCompressedData [[comment("Data is pallet indecies either into current LDC or GCT and is compressed using LZW")]];
+    DataSubBlocks lzwCompressedData [[comment("Data is palette indices either into current LDC or GCT and is compressed using LZW")]];
 };
 
 struct CommentExtension {
@@ -109,7 +109,7 @@ struct PlainTextExtension {
     u8 textForegroundColorIndex;
     u8 textBackgroundColorIndex;
     DataSubBlocks plainTextData;
-    
+
 };
 
 struct GraphicControlExtension {
@@ -130,7 +130,7 @@ struct Extension {
 
 struct Block {
     u8 identifier [[format("format::identifier_name")]];
-    if(identifier == IMAGE_SEPERATOR_MAGIC) ImageDescriptor i [[inline]];
+    if(identifier == IMAGE_SEPARATOR_MAGIC) ImageDescriptor i [[inline]];
     if(identifier == EXTENSION_INTRODUCER_MAGIC) Extension e [[inline]];
     if(identifier == GIF_TRAILER_MAGIC) break;
     u8 blockTerminator;
@@ -141,9 +141,9 @@ namespace format {
         if(value == 0x00) return "Do nothing";
         if(value == 0x01) return "Do not remove pixels";
         if(value == 0x02) return "Restore background pixels";
-        if(value == 0x03) return "Restore previous pixels"; 
+        if(value == 0x03) return "Restore previous pixels";
     };
-    
+
     fn extension_name(u8 label) {
         if(label == LABEL_GC) return "Graphical Control Extension";
         if(label == LABEL_COMMENT) return "Comment Extension";
@@ -153,14 +153,14 @@ namespace format {
     };
 
     fn block_name(ref Block b) {
-        if(b.identifier == IMAGE_SEPERATOR_MAGIC) return "Image Descriptor";
+        if(b.identifier == IMAGE_SEPARATOR_MAGIC) return "Image Descriptor";
         if(b.identifier == EXTENSION_INTRODUCER_MAGIC) return "Extension";
         if(b.identifier == GIF_TRAILER_MAGIC) return "Trailer";
         return "Unknown Block Type";
     };
 
     fn identifier_name(u8 identifier) {
-        if(identifier == IMAGE_SEPERATOR_MAGIC) return "Image Separator";
+        if(identifier == IMAGE_SEPARATOR_MAGIC) return "Image Separator";
         if(identifier == EXTENSION_INTRODUCER_MAGIC) return "Extension Introducer";
         if(identifier == GIF_TRAILER_MAGIC) return "GIF Trailer";
         return "Unknown Identifier";

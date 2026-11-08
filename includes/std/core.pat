@@ -56,17 +56,17 @@ namespace auto std::core {
 
 
     /**
-        Sets the current default endianess.
-        Any patterns created following this attribute will be created using the set endianess.
-        @param endian The new default endianess
+        Sets the current default endianness.
+        Any patterns created following this attribute will be created using the set endianness.
+        @param endian The new default endianness
     */
     fn set_endian(std::mem::Endian endian) {
         builtin::std::core::set_endian(u32(endian));
     };
 
     /**
-        Gets the current default endianess.
-        @return The currently set default endianess
+        Gets the current default endianness.
+        @return The currently set default endianness
     */
     fn get_endian() {
         return builtin::std::core::get_endian();
@@ -159,9 +159,34 @@ namespace auto std::core {
     /**
         Changes the comment attached to a pattern
         @param pattern The pattern to modify
-        @param name The new comment of the pattern
+        @param comment The new comment of the pattern
     */
     fn set_pattern_comment(ref auto pattern, str comment) {
-        builtin::std::core::set_pattern_comment(pattern, name);
+        builtin::std::core::set_pattern_comment(pattern, comment);
     }; 
+
+    /**
+        Executes the function with the given name, passing in all given arguments
+        @param function_name The namespace-prefixed name of the function
+        @param args Arguments to pass to the function
+    */
+    fn execute_function(str function_name, auto ... args) {
+        builtin::std::core::execute_function(function_name, args);
+    };
+
+    /**
+        Sets the pattern color palette for all future created patterns
+        @param args RGBA8 colors as 32 bit integers (0xAABBGGRR)
+    */
+    fn set_pattern_palette_colors(auto ... colors) {
+        builtin::std::core::set_pattern_palette_colors(colors);
+    };
+
+    /**
+        Resets the current pattern palette progress back to zero.
+        This can be useful to force all instances of a type to have the same coloring for its members
+    */
+    fn reset_pattern_palette() {
+        builtin::std::core::reset_pattern_palette();
+    };
 }

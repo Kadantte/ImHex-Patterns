@@ -1,87 +1,612 @@
 #pragma author gmestanley
-#pragma description .nes file format
+#pragma description Nintendo Entertainment System ROM
+#pragma MIME application/x-nes-rom
 
-import std.mem;
 import std.string;
 
-bitfield iNES07Flags {
-	mirroringIsVertical : 1;
-	batterybackedPRGRAM : 1;
-	trainerOf512Bytes : 1;
-	ignoreMirroring : 1;
-	mapperLowerNybble : 4;
-	vsUnisystem : 1;
-	playchoice10 : 1;
-	nes2Format : 2 [[name("nes2.0Format")]];
-	mapperHigherNybble : 4;
-} [[name("iNES0.7Flags")]];
+enum MirroringType : u8 {
+	Horizontal,
+	Vertical
+};
 
-bitfield Flags9 {
-	isPAL : 1;
+fn mirroring(u8 value) {
+	MirroringType enumValue = value;
+	return enumValue;
+};
+
+bitfield Flags {
+	mirroring : 1 [[format("mirroring")]];
+	ignoreMirroring : 1;
+	trainerOf512Bytes : 1;
+	batterybackedPRGRAM : 1;
+	lowerMapperNybble : 4;
+};
+
+enum ConsoleType : u8 {
+	Regular,
+	VsSystem,
+	PlayChoice10,
+	ExtendedConsoleType
+};
+
+fn consoleType(u8 bits) {
+	ConsoleType type = bits;
+	return type;
+};
+
+fn nes2Format(u8 bits) {
+	return std::string::to_string(bits == 2) + " (" + std::string::to_string(bits) + ")";
+};
+
+bitfield iNESFlags7 {
+	consoleType : 2 [[format("consoleType")]];
+	nes2Format : 2 [[format("nes2Format"), name("nes2.0Format")]];
+	higherMapperNybble : 4;
+};
+
+enum OldTVSystemByte : u8 {
+	NTSC,
+	PAL
+};
+
+fn formatOldTVSystemByte(u8 value) {
+	OldTVSystemByte enumValue = value;
+	return value;
+};
+
+bitfield iNESFlags9 {
+	tvSystem : 1 [[format("formatOldTVSystemByte")]];
 	padding : 7;
 };
 
-bitfield Flags10 {
-	tvSystem : 2;
+fn formatDualTVSystem(u8 bits) {
+	match (bits) {
+		(0): return "NTSC";
+		(2): return "PAL";
+		(1 || 3): return "Dual Compatible";
+	}
+};
+
+bitfield iNESFlags10 {
+	dualTVSystem : 2 [[format("formatDualTVSystem")]];
 	padding : 2;
 	prgRAM : 1;
 	busConflicts : 1;
-	padding : 2;
 };
 
-struct iNESFlags {
-	iNES07Flags ines07Flags [[name("ines0.7Flags")]];
-	if (!ines07Flags.nes2Format) {
-		u8 prgRAM8KBMultiplier;
-		Flags9 flags9;
-		Flags10 flags10;
-		restLength = 5;
+bitfield MapperExtra {
+	highestMapperNybble : 4;
+	submapper : 4;
+};
+
+bitfield ROMSize {
+	extraPRGROMSize : 4;
+	extraCHRROMSize : 4;
+};
+
+bitfield PRGRAMSize {
+	prgRAMShiftCount : 4;
+	eepromShiftCount : 4 [[comment("EEPROM = Non-volatile PRG RAM, or NVPRGRAM")]];
+};
+
+bitfield CHRRAMSize {
+	chrRAMSizeShiftCount : 4;
+	chrNVRAMSizeShiftCount : 4;
+};
+
+enum TimingList : u8 {
+	NTSC,
+	PAL,
+	MultiRegion,
+	Dendy
+};
+
+fn Timing(u8 value) {
+	TimingList enumValue = value;
+	return enumValue;
+};
+
+bitfield Timing {
+	processorTiming : 2 [[format("Timing")]];
+	padding : 6;
+};
+
+bitfield VsSystemType {
+	vsPPUType : 4;
+	vsHardwareType: 4;
+};
+
+enum ExtendedConsoleType : ConsoleType {
+	DecimalModeFamiclone = 3,
+	PlugThrough,
+	VT01,
+	VT02,
+	VT03,
+	VT09,
+	VT32,
+	VT369,
+	UM6578,
+	FamicomNetworkSystem
+};
+
+fn formatExtendedConsoleType(u8 nybble) {
+	ExtendedConsoleType type = nybble;
+	return type;
+};
+
+bitfield ExtendedConsoleTypeByte {
+	type : 4 [[format("formatExtendedConsoleType")]];
+	padding : 4;
+};
+
+bitfield MiscellaneousROMsHeaderByte {
+	numberOfMiscellaneousROMs : 2;
+	padding : 6;
+};
+
+enum DefaultExpansionDeviceType : u8 {
+	Unspecified,
+	StandardControllers,
+	FourScoreorSatellite,
+	FamicomFourPlayersAdapter,
+	VsSystem1P4016h,
+	VsSystem1P4017h,
+	MAMEPinballJapan,
+	VsZapper,
+	Zapper,
+	TwoZappers,
+	BandaiHyperShotLightgun,
+	PowerPadSideA,
+	PowerPadSideB,
+	FamilyTrainerSideA,
+	FamilyTrainerSideB,
+	Multicart = 0x2A
+};
+
+fn formatDefaultExpansionDevice(u8 value) {
+	DefaultExpansionDeviceType enumValue = value;
+	return enumValue;
+};
+
+bitfield DefaultExpansionDevice {
+	defaultExpansionDevice : 6 [[format("formatDefaultExpansionDevice")]];
+};
+
+struct NES2Attributes {
+	MapperExtra mapperExtra;
+	ROMSize romSize;
+	PRGRAMSize prgRAMSize;
+	CHRRAMSize chrRAMSize;
+	Timing timing;
+	if (parent.inesFlags7.consoleType == ConsoleType::VsSystem) {
+		VsSystemType vsSystemType;
+	}
+	else if (parent.inesFlags7.consoleType == ConsoleType::ExtendedConsoleType) {
+		ExtendedConsoleTypeByte extendedConsoleTypeByte;
 	}
 	else {
-		restLength = 9;
+		padding[1];
 	}
+	MiscellaneousROMsHeaderByte miscellaneousROMs;
+	DefaultExpansionDevice defaultExpansionDevice;
+} [[inline]];
+
+fn renderEOF(str string) {
+	return "\"NES<EOF>\"";
 };
 
-u8 restLength;
-
+u8 FILLED_NES2_FLAGS = 0b1100;
 struct Header {
-	char identifier[4];
-	u8 prgROM16KBMultiplier;
-	u8 chrROM8KBMultiplier;
-	iNESFlags inesFlags;
-	char rest[restLength];
+	char identifier[4] [[format("renderEOF")]];
+	u8 prgROMSizeBy16KiBs;
+	u8 chrROMSizeBy8KiBs;
+	Flags flags;
+	if ($[0x07] & FILLED_NES2_FLAGS != 0b100) {
+		iNESFlags7 inesFlags7;
+		if (inesFlags7.nes2Format)
+			NES2Attributes nes2Attributes;
+		else if ($[0x07] & FILLED_NES2_FLAGS == 0 && !std::mem::read_unsigned(0x0C, 4)) {
+			u8 prgRAMSizeBy8KiBs;
+			iNESFlags9 inesFlags9;
+			iNESFlags10 inesFlags10;
+		}
+	}
 };
 
 Header header @ 0x00;
 
-enum EncodingType : u8 {
-	ASCII = 1
+u8 FILLED_HIGHER_NYBBLE = 0b1111;
+u8 SET_NES2_FLAGS = 0b1000;
+u16 mapperValue = (0x0100 * ($[0x08] & FILLED_HIGHER_NYBBLE)) * ($[7] & FILLED_NES2_FLAGS == SET_NES2_FLAGS)
++ (0x10 * ($[0x07] >> 4)) * ($[0x07] & FILLED_NES2_FLAGS != 0b100)
++ header.flags.lowerMapperNybble;
+fn identifyMapper(u16 mapperValue, u8 submapperValue) {
+	str mapper;
+	str submapper;
+	str designation;
+	match (mapperValue) {
+		(0): mapper = "No mapper";
+		(1): mapper = "Nintendo MMC1B";
+		(2): mapper = "Nintendo UxROM";
+		(3): mapper = "Nintendo CNROM-32";
+		(4): mapper = "Nintendo MMC3";
+		(5): mapper = "Nintendo MMC5";
+		(6): mapper = "Front Fareast Magic Card 1/2M RAM Cartridge";
+		(7): mapper = "Nintendo AxROM";
+		(8): mapper = "Front Fareast Magic Card 1/2M RAM Cartridge [Initial latch-based banking mode 4]";
+		(9): mapper = "Nintendo MMC2";
+		(10): mapper = "Nintendo MMC4";
+		(11): mapper = "Color Dreams";
+		(12): mapper = "[See submapper]";
+		(13): mapper = "Nintendo CPROM";
+		(14): mapper = "SL-1632";
+		(15): mapper = "K-102xx";
+		(16): mapper = "Bandai FCG boards";
+		(17): mapper = "Front Fareast Super Magic Card RAM cartridge";
+		(18): mapper = "Jaleco SS88006";
+		(19): mapper = "Namco 129/163";
+		(20): mapper = "Famicom Disk System";
+		(21): mapper = "Konami VRC4a/VRC4c";
+		(22): mapper = "Konami VRC2a";
+		(23): mapper = "Konami VRC4e or VRC2b + VRC4f";
+		(24): mapper = "Konami VRC6a";
+		(25): mapper = "Konami VRC4d or VRC2c + VRC4b";
+		(26): mapper = "Konami VRC6b";
+		(27): mapper = "World Hero";
+		(28): mapper = "InfiniteNESLives Action 53";
+		(29): mapper = "RET-CUFROM";
+		(30): mapper = "Nintendo UNROM-512";
+		(31): mapper = "NSF";
+		(32): mapper = "G-101";
+		(33): mapper = "Taito TC0190";
+		(34): mapper = "[See submapper]";
+		(35): mapper = "J.Y. Company ASIC [8KiB WRAM]";
+		(36): mapper = "Micro Genius 01-22000-400";
+		(37): mapper = "Nintendo SMB+Tetris+NWC";
+		(38): mapper = "Bit Corp. Crime Busters";
+			(39): mapper = "Study & Game 32-in-1 [DEPRECATED]";
+		(40): mapper = "NTDEC 27xx";
+		(41): mapper = "Caltron 6-in-1";
+		(42): mapper = "FDS -> NES Hacks";
+		(43): mapper = "TONY-I/YS-612";
+		(44): mapper = "Super Big 7-in-1";
+		(45): mapper = "GA23C"; //TC3294 according to NintendulatorNRS
+		(46): mapper = "Lite Star Rumble Station";
+		(47): mapper = "Nintendo Super Spike V'Ball + NWC";
+		(48): mapper = "Taito TC0690";
+		(49): mapper = "Super HIK 4-in-1";
+		(50): mapper = "N-32 [Super Mario Bros. 2 (J)]";
+		(51): mapper = "[See submapper]";
+		(52): mapper = "Realtec 8213";
+		(53): mapper = "Supervision 16-in-1";
+			(54): mapper = "Novel Diamond 9999999-in-1 [DEPRECATED]";
+		(55): mapper = "QFJxxxx";
+		(56): mapper = "Kaiser KS202";
+		(57): mapper = "GK";
+		(58): mapper = "WQ";
+		(59): mapper = "T3H53";
+		(60): mapper = "Reset-based NROM-128 4-in-1";
+		(61): mapper = "[See submapper]";
+		(62): mapper = "Super 700-in-1";
+		(63): mapper = "[See submapper]";
+		(64): mapper = "Tengen RAMBO-1";
+		(65): mapper = "Irem H3001";
+		(66): mapper = "xxROM";
+		(67): mapper = "Sunsoft-3";
+		(68): mapper = "Sunsoft-4";
+		(69): mapper = "Sunsoft FME-7/Sunsoft 5A/Sunsoft 5B";
+		(70): mapper = "Family Trainer Mat";
+		(71): mapper = "Camerica";
+		(72): mapper = "Jaleco JF-17 [16 KiB PRG ROM]";
+		(73): mapper = "Konami VRC3";
+		(74): mapper = "Waixing 860908C";
+		(75): mapper = "Konami VRC1";
+		(76): mapper = "NAMCOT-3446";
+		(77): mapper = "Napoleon Senki";
+		(78): mapper = "74HC161/32";
+		(79): mapper = "Tengen NINA-003/NINA-006";
+		(80): mapper = "X1-005";
+		(81): mapper = "N715021";
+		(82): mapper = "X1-017";
+		(83): mapper = "Cony & Yoko chip";
+			(84): mapper = "PC-SMB2J [DEPRECATED]";
+		(85): mapper = "Konami VRC7";
+		(86): mapper = "Jaleco JF-13";
+		(87): mapper = "Jaleco JF-87";
+		(88): mapper = "Namco chip";
+		(89): mapper = "Sunsoft 2.5";
+		(90): mapper = "J.Y. Company ASIC [ROM nametables & extended mirroring]";
+		(91): mapper = "J.Y. Company clone boards";
+		(92): mapper = "Jaleco JF-17 [16 KiB PRG ROM]";
+		(106): mapper = "Super Mario Bros. 3 bootleg";
+		(115): mapper = "Kǎ Shèng SFC-0xx";
+		(116): mapper = "Supertone SOMARI-P";
+		(121): mapper = "Kǎ Shèng A971";
+		(124): mapper = "Super Game Mega Type";
+		(125): mapper = "Whirlwind Manu FDS -> NES";
+		(126): mapper = "TEC9719";
+		(127): mapper = "Double Dragon II - The Revenge (J) bootleg";
+		(132): mapper = "TXC Corp. 05-00002-010";
+		(163): mapper = "Nanjing FC-001";
+		(164): mapper = "Dōngdá PEC-9588";
+		(167): mapper = "Subor Educational Computer";
+		(173): mapper = "C&E 05-00002-010";
+		(183): mapper = "AX5208C";
+		(187): mapper = "Kǎ Shèng A98402";
+		(191): mapper = "Xianfeng Cartoon Dǔshén";
+		(192): mapper = "Waixing FS308";
+		(195): mapper = "Waixing FS303";
+		(198): mapper = "Xianfeng Cartoon Tūnshí Tiāndì - Sānguó Wàizhuàn";
+		(215): mapper = "Sugar Softec 8237";
+		(219): mapper = "Kǎ Shèng A9461";
+			(224): mapper = "Jncota KT-008 [DEPRECATED]";
+		(225): mapper = "ET-4310";
+		(240): mapper = "C&E board";
+		(241): mapper = "BNROM with WRAM";
+		(244): mapper = "C&E Decathlon";
+		(252): mapper = "Waixing San Guo Zhi";
+		(253): mapper = "Waixing Qi Long Zhu";
+
+		(256): mapper = "V.R. Technology OneBus";
+		(257): mapper = "Dōngdá PEC-586";
+		(269): mapper = "Nice Code Games Xplosion 121-in-1";
+		(270): mapper = "$412C Bankswitch";
+		(281): mapper = "J.Y. Company YY8xxxxxC";
+		(291): mapper = "Kǎ Shèng Mortal Kombat";
+		(296): mapper = "V.R. Technology VT32";
+		(355): mapper = "Jùjīng 3D-BLOCK";
+		(383): mapper = "J.Y. Company YY840708C";
+		(405): mapper = "UMC UM6578";
+		(407): mapper = "Senario Win, Lose or Draw";
+		(419): mapper = "Taikee TK-8007 MCU";
+		(422): mapper = "ING-022";
+		(423): mapper = "Lexibook Compact Cyber Arcade";
+		(424): mapper = "Lexibook Retro TV Game Console";
+		(425): mapper = "Cube Tech Handheld";
+		(426): mapper = "V.R. Technology OneBus [Serial ROM in GPIO]";
+		(427): mapper = "V.R. Technology OneBus [I²C chip in GPIO]";
+		(432): mapper = "Realtec 8xxx";
+		(433): mapper = "Realtec NC-20MB";
+		(443): mapper = "Realtec NC3000M";
+		(444): mapper = "Realtec NC7000M";
+
+		(514): mapper = "Subor Karaoke";
+		(518): mapper = "Subor SB-97";
+		(523): mapper = "Jncota Fēngshénbǎng: Fúmó Sān Tàizǐ";
+		(534): mapper = "Nice Code ING003C";
+		(544): mapper = "Waixing FS306";
+		(556): mapper = "J.Y. Company JY-215";
+		(594): mapper = "Rinco FSG2";
+		(595): mapper = "NES-4MROM-512";
+		(600): mapper = "UMC UM6578 (ABL)";
+		(601): mapper = "UMC UM6578 (JungleTac)";
+		(602): mapper = "Subor SB-2000";
+		(682): mapper = "Broke Studio Rainbow Mapper";
+	}
+	match (mapperValue) {
+		(0): designation = "NROM";
+		(1): designation = "SxROM";
+		(4): {
+			if (header.prgROMSizeBy16KiBs >= 8 && header.chrROMSizeBy8KiBs >= 16) {
+				if (($[0x08] != 1 && ($[0x07] & FILLED_NES2_FLAGS == 0 && !std::mem::read_unsigned(0x0C, 4))) || 
+				($[0x0A]&FILLED_HIGHER_NYBBLE!=7 && ($[0x07] & FILLED_NES2_FLAGS == SET_NES2_FLAGS)))
+					designation = "TLROM [128~512 KiBs PRG ROM]";
+				else {
+					if (header.flags.batterybackedPRGRAM) designation = "TKROM [128~512 KiBs PRG ROM, 8 KiB PRG RAM]";
+					else designation = "TSROM [128~512 KiBs PRG ROM, 8 KiB PRG RAM, no battery]";
+				}
+			}
+			else if (header.prgROMSizeBy16KiBs == 4) designation = "TBROM [64 KiBs PRG ROM]";
+			else designation = "TxROM";
+		}
+	}
+	if (mapperValue == 3) {
+		match (submapperValue) {
+			(0): submapper = "Bus conflict";
+			(1): submapper = "No bus conflicts";
+			(2): submapper = "AND-type bus conflicts";
+		}
+	}
+	else if (mapperValue == 12) {
+		match (submapperValue) {
+			(0): submapper = "Supertone SL-5020B";
+			(1): submapper = "Front Fareast Magic Card 4M RAM Cartridge";
+		}
+	}
+	else if (mapperValue == 16) {
+		match (submapperValue) {
+			(0): submapper = "Both Bandai FCG-1/2 and Bandai LZ93D50";
+			(4): submapper = "Bandai FCG-1/2";
+			(5): submapper = "Bandai LZ93D50";
+		}
+	}
+	else if (mapperValue == 34) {
+		match (submapperValue) {
+			(0): submapper = "Tengen NINA-001/NINA-002";
+			(1): submapper = "BNROM";
+		}
+	}
+	else if (mapperValue == 40) {
+		match (submapperValue) {
+			(0): submapper = "NTDEC 2722";
+			(1): submapper = "NTDEC 2752";
+		}
+	}
+	else if (mapperValue == 51) {
+		if (submapperValue == 1) submapper = "11-in-1 Ball Games";
+	}
+	else if (mapperValue == 61) {
+		match (submapperValue) {
+			(0): submapper = "NTDEC 0324";
+			(1): submapper = "NTDEC BS-N032";
+			(_): submapper = "GS-2017";
+		}
+	}
+	else if (mapperValue == 63) {
+		match (submapperValue) {
+			(0): submapper = "NTDEC TH2xxx-x";
+			(1): submapper = "82-in-1";
+		}
+	}
+	else if (mapperValue == 256 || mapperValue == 407 || mapperValue == 419 || mapperValue == 425) {
+		match (submapperValue) {
+			(0): submapper = "Normal";
+			(1): submapper = "Waixing VT03";
+			(2): submapper = "Power Joy Supermax";
+			(3): submapper = "Zechess";
+			(4): submapper = "Qishenglong";
+			(5): submapper = "Waixing VT02";
+			(11): submapper = "Vibes";
+			(12): submapper = "Cheertone";
+			(13): submapper = "Taikee";
+			(14): submapper = "Karaoto";
+			(15): submapper = "JungleTac";
+		}
+		submapper += " protection scheme";
+	}
+	else if (mapperValue == 427) {
+		match (submapperValue) {
+			(1): submapper = "Lexibook Cyber Arcade Pocket";
+		}
+	}
+	std::print("Mapper: " + mapper + " (" + std::string::to_string(mapperValue) + ")");
+	if (submapper) std::print("Submapper: " + submapper + " (" + std::string::to_string(submapperValue) + ")");
+	if (designation) std::print("Designation: " + designation);
+};
+identifyMapper(mapperValue, $[0x08] >> 4);
+
+u8 trainer[512*header.flags.trainerOf512Bytes] @ 0x10;
+
+enum CHRType : u8 {
+	CHRROM,
+	CHRRAM
 };
 
-struct OfficialHeader {
+fn chrType(u8 value) {
+	CHRType enumValue = value;
+	return enumValue;
+};
+
+fn chrSize(u8 value) {
+	u24 actualSize;
+	if (value == 4) actualSize = 262144;
+	else actualSize = 8192 * header.chrROMSizeBy8KiBs;
+	return std::string::to_string(value) + " (" + std::string::to_string(actualSize) + ")";
+};
+
+bitfield MemorySize {
+	prgROMSizeBy16KiBs : 4;
+	chrType : 1 [[format("chrType")]];
+	chrSize : 3 [[format("chrSize")]];
+};
+
+enum ArrangementList : u8 {
+	Horizontal,
+	Vertical
+};
+
+fn arrangement(u8 value) {
+	ArrangementList enumValue = value;
+	return enumValue;
+};
+
+enum MapperList : u8 {
+	NROM,
+	CNROM,
+	UNROM,
+	GNROM,
+	MMC
+};
+
+fn mapper(u8 value) {
+	MapperList enumValue = value;
+	return enumValue;
+};
+
+bitfield CartridgeType {
+	nametableArrangement : 1 [[format("arrangement")]];
+	mapper : 7 [[format("mapper")]];
+};
+
+enum EncodingType : u8 {
+	None,
+	ASCII,
+	JIS
+};
+
+fn titleLength(u8 value) { return value+1; };
+
+struct Footer {
 	char title[16] [[hex::spec_name("Title Registration Area")]];
 	u16 programChecksum;
 	u16 characterChecksum;
-	u8 memorySize [[hex::spec_name("Cartridge Memory Size")]];
-	u8 cartridgeType;
-	EncodingType encodingType [[hex::spec_name("Registration Character Type Distinction")]];
-	u8 titleLength [[hex::spec_name("Registration Characters Count")]];
-	u8 makerID [[hex::spec_name("Maker Code")]];
-	u8 complementaryChecksum;
+	MemorySize memorySize [[hex::spec_name("Cartridge Memory Size")]];
+	CartridgeType cartridgeType;
+	EncodingType encodingType [[hex::spec_name("Registration Characters Type Distinction")]];
+	u8 titleLength [[hex::spec_name("Registration Characters Count"), transform("titleLength")]];
+	u8 licenseeID [[hex::spec_name("Maker Code")]];
+	u8 complementaryChecksum [[hex::spec_name("Checksum for Character Checksum~Maker Code")]];
 };
 
-union OfficialHeaderUnion {
-	u8 miscellaneousData[26];
-	OfficialHeader officialHeader;
+u16 INES_PRGROM_MINIMUM_SIZE = 16384;
+u8 LOWER_TWO_DIGITS = 0b11;
+u8 EXPONENT_MULTIPLIER_FLAG = 0x0F;
+u32 fullPRGROMSize = (std::mem::size()-16-(4096*($[0x0E]&LOWER_TWO_DIGITS))) * ($[0x09] & FILLED_HIGHER_NYBBLE == EXPONENT_MULTIPLIER_FLAG)
++ (INES_PRGROM_MINIMUM_SIZE * (
+(0x0100 * ($[0x09] & FILLED_HIGHER_NYBBLE)) * ($[0x07] & FILLED_NES2_FLAGS == SET_NES2_FLAGS)
++ header.prgROMSizeBy16KiBs)
+) * ($[0x09] & FILLED_HIGHER_NYBBLE != EXPONENT_MULTIPLIER_FLAG);
+
+bool debug in;
+fn debugFxn() {
+	if (debug) {
+		std::print("Actual PRG-ROM size: " + std::string::to_string(fullPRGROMSize));
+		std::print("PRG-ROM size by exponent-multiplier notation: " + std::string::to_string((std::mem::size()-16-(4096*($[0x0E]&LOWER_TWO_DIGITS))) * ($[0x09] & FILLED_HIGHER_NYBBLE == FILLED_HIGHER_NYBBLE)));
+		std::print("PRG-ROM size in 16 KiBs: " + std::string::to_string((INES_PRGROM_MINIMUM_SIZE * ((0x0100 * ($[0x09] & FILLED_HIGHER_NYBBLE)) * ($[0x07] & FILLED_NES2_FLAGS == SET_NES2_FLAGS) + header.prgROMSizeBy16KiBs)) * ($[0x09] & FILLED_HIGHER_NYBBLE != FILLED_HIGHER_NYBBLE)));
+	}
 };
+debugFxn();
+
+fn hasFooter() {
+	u8 sum;
+	for (u8 i = 0, i < 8, i += 1) {
+		sum += $[(fullPRGROMSize - 14) + i];
+	}
+	return !sum;
+};
+
+u8 FOOTER_SIZE = 26;
+u8 VECTORS_SIZE = 6;
 
 struct PRGROM {
-	u8 data[16384*header.prgROM16KBMultiplier-32];
-	OfficialHeaderUnion officialHeaderUnion;
+	u8 data[fullPRGROMSize - FOOTER_SIZE * hasFooter() - VECTORS_SIZE];
+	if (hasFooter())
+		Footer footer;
 	u16 nmi;
-	u16 entryPoint;
+	u16 resetVector [[comment("Entry Point")]];
 	u16 externalIRQ;
 };
+PRGROM prgROM @ 0x10 + sizeof(trainer);
 
-PRGROM prgROM @ sizeof(header);
-u8 chrROM[8192*header.chrROM8KBMultiplier] @ sizeof(header)+sizeof(prgROM);
+u16 CHRROM_MINIMUM_SIZE = 8192;
+u24 calculatedCHRROMSize = CHRROM_MINIMUM_SIZE * ((0x0100 * ($[0x09] >> 4)) * ($[0x07] & FILLED_NES2_FLAGS == SET_NES2_FLAGS) + header.chrROMSizeBy8KiBs);
+u8 chrROM[calculatedCHRROMSize] @ addressof(prgROM) + fullPRGROMSize;
+
+struct MiscellaneousROMs {
+	if ($[0x07] & LOWER_TWO_DIGITS == ConsoleType::PlayChoice10) {
+		u8 instructionsROM[8192] [[hex::spec_name("INST-ROM")]];
+		u8 decryptionDataPROM[16];
+		u8 decryptionCounterOutPROM[16];
+	}
+	else if ($[0x0D] == ExtendedConsoleType::VT369) {
+		u8 embeddedROM[std::mem::size()-calculatedCHRROMSize-fullPRGROMSize-sizeof(trainer)-0x10];
+	}
+	else if (mapperValue == 355) {
+		u8 antiCloningROM[1024];
+	}
+	else {
+		u8 miscellaneousROM[256];
+	}
+};
+
+MiscellaneousROMs miscellaneousROMs[$[0x0E] & LOWER_TWO_DIGITS > 0] @ addressof(prgROM) + fullPRGROMSize + calculatedCHRROMSize;

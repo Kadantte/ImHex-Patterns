@@ -1,5 +1,7 @@
 #pragma author ogmini https://github.com/ogmini
-#pragma description Windows 11 Notepad Window State file %localappdata%\Packages\Microsoft.WindowsNotepad_8wekyb3d8bbwe\LocalState\WindowState
+#pragma description Windows 11 Notepad Window State file
+#pragma magic [ 4E 50 ] @ 0x00
+// File found at %localappdata%/Packages/Microsoft.WindowsNotepad_8wekyb3d8bbwe/LocalState/WindowState
 
 #include <std/string.pat>
 #include <type/leb128.pat>
